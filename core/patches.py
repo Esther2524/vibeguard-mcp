@@ -54,6 +54,19 @@ def apply_patch_set(target_codebase: str, patch_set: dict) -> dict:
     return {"applied": applied, "failed": failed, "name": patch_set["name"]}
 
 
+def files_in_patch(patch_content: str) -> list[str]:
+    """Extract the list of files a unified-diff patch will modify.
+    Looks at `+++ b/<path>` lines, which `git diff` writes for every file."""
+    files = []
+    for line in patch_content.splitlines():
+        if line.startswith("+++ b/"):
+            files.append(line[len("+++ b/"):])
+        elif line.startswith("+++ ") and not line.startswith("+++ /dev/null"):
+            # fallback: handle non-git diff format
+            files.append(line[len("+++ "):])
+    return files
+
+
 def patch_set_for_advisory(patch_root: str, advisory_id: str) -> dict | None:
     """Look up the patch set for a given advisory_id (patch directory name).
 

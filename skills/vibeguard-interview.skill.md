@@ -145,9 +145,11 @@ Good phrasings:
 
 ---
 
-## Phase 3 — Synthesize and execute
+## Phase 3 — Synthesize, preview, and execute (TWO-CALL PROTOCOL)
 
-Once you have all 5 (or more) answers, build the structured input and call:
+`complete_handoff` is destructive — it will modify the owner's real codebase. So it has a two-call protocol that forces you to show the plan to the user before pulling the trigger.
+
+### Step 3a — Call complete_handoff WITHOUT `confirm` to get the plan
 
 ```
 vibeguard.complete_handoff(
@@ -157,14 +159,56 @@ vibeguard.complete_handoff(
   persona_summary="<free-text summary from Theme 1>",
   contractor_handle="<contractor name if user gave one>",
   notes="<anything else worth recording>"
+  # confirm omitted — defaults to False = preview mode
 )
 ```
 
-Returns:
+Returns `{preview: true, executed: false, plan: {...}, ...}`. The `plan` object lists exactly:
+- `will_modify_owner_codebase`: array of files in the OWNER's repo that the patches will edit
+- `patches_to_apply`: array of `{advisory, patch_files}` entries
+- `will_create_workspace_at`: target workspace path
+- `will_write_owner_memory_to` and `will_write_contractor_brief_to`: artifact paths
+- `summary_for_user`: a plain-English version you can paste into chat
+
+### Step 3b — Show the plan to the user
+
+Show them `plan.summary_for_user` (and the full file list under `will_modify_owner_codebase` — they need to see exactly what's about to change in their real code).
+
+Sample chat:
+
+> "OK, here's what I'm about to do — please confirm:
+>
+> ⚠️ I'll apply 2 refactor patches for [fe_be_separation, test_mode_keys], modifying 4 files in YOUR REAL CODEBASE: `.env.example`, `.gitignore`, `src/lib/config.ts`, `src/lib/stripe_stuff.ts`.
+>
+> 📦 I'll generate Sarah's sanitized workspace at: `~/vibeguard-workspaces/sarah-abc123/`
+>
+> 📝 I'll write 2 markdown files: `vibeguard-owner-memory.md` (in your repo) and `vibeguard-contractor-brief.md` (in the workspace).
+>
+> Ready to proceed? (yes / no / edit something)"
+
+If the user says no or wants to change something — go back to Phase 2 and revise the answers, then re-preview.
+
+### Step 3c — Call complete_handoff again with `confirm=true`
+
+When the user says yes, call again with the SAME arguments + `confirm=true`:
+
+```
+vibeguard.complete_handoff(
+  workspace_id="<same as 3a>",
+  approved_advisories=[<same>],
+  scope_globs=[<same>],
+  persona_summary="<same>",
+  contractor_handle="<same>",
+  notes="<same>",
+  confirm=True   # <-- this is what unlocks execution
+)
+```
+
+Returns `{preview: false, executed: true, ...}` plus all the result fields:
 - `workspace_path` — where the contractor's sanitized workspace was created
 - `contractor_brief_path` — path to the brief inside the workspace
 - `owner_memory_path` — path to the owner's persistent memory file
-- `applied_changes` — list of patches applied to the real codebase (empty if no advisories triggered patches, or if patch sets are placeholder)
+- `applied_changes` — list of patches applied to the real codebase
 - `mock_count`, `redaction_count`, `files_in_workspace` — stats
 
 ---

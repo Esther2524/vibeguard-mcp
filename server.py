@@ -69,30 +69,33 @@ def complete_handoff(
     persona_summary: str | None = None,
     contractor_handle: str | None = None,
     notes: str | None = None,
+    confirm: bool = False,
 ) -> dict:
-    """Execute the handoff: refactor (if approved) + sanitize + write artifacts.
+    """Plan or execute the handoff. TWO-PHASE:
 
-    Call after the host agent has interviewed the user. Pass structured input
-    derived from their answers — this MCP does not parse free-text Q&A.
+    PHASE 1 — preview (confirm=False, default):
+        Returns the plan. Lists which files in the owner's real codebase
+        will be modified, which patches will apply, where the workspace
+        will be created. No side effects. Show this to the user.
+
+    PHASE 2 — execute (confirm=True):
+        Actually applies the patches, generates the sanitized workspace,
+        writes vibeguard-owner-memory.md (in owner's project root) and
+        vibeguard-contractor-brief.md (inside the workspace).
+
+    The two-phase contract forces you (the host agent) to surface the
+    destructive plan to the user before doing it.
 
     Args:
         workspace_id: from start_handoff.
-        approved_advisories: list of advisory ids the user said yes to,
-                             e.g. ["fe_be_separation"]. Each triggers any
-                             patches in patches/<advisory_id>/.
-        scope_globs: list of file glob patterns the contractor needs,
-                     e.g. ["app/**", "components/**"]. Defaults to a
-                     reasonable front-end scope.
-        persona_summary: brief note on the owner's technical level — included
-                         in vibeguard-owner-memory.md for future sessions.
+        approved_advisories: e.g. ["fe_be_separation"]. Each triggers any
+            patches in patches/<advisory_id>/.
+        scope_globs: file globs the contractor needs. Defaults to a reasonable
+            front-end scope.
+        persona_summary: brief note on the owner's technical level.
         contractor_handle: optional override for the contractor name.
         notes: any extra context to record.
-
-    Side effects:
-        - Applies patches to owner's real codebase if approved_advisories matches.
-        - Creates ~/vibeguard-workspaces/<contractor>-<workspace_id>/ with sanitized files.
-        - Writes vibeguard-owner-memory.md in owner's project root.
-        - Writes vibeguard-contractor-brief.md in the contractor workspace.
+        confirm: must be True to actually execute. Default False = preview only.
 
     Idempotent: re-call with the same workspace_id and updated args to revise.
     """
@@ -104,6 +107,7 @@ def complete_handoff(
         persona_summary=persona_summary,
         contractor_handle=contractor_handle,
         notes=notes,
+        confirm=confirm,
     )
 
 
