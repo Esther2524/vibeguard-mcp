@@ -132,26 +132,6 @@ python scripts/dry_run.py /path/to/repo   # same as dry-run, on any codebase
 - `skills/` — host-agent skill files. **The most important file in the repo.**
 - `scripts/` — quickstart, dry-run, see-it walkthrough.
 
-## Running tests
-
-```bash
-.venv/bin/pip install pytest
-.venv/bin/python -m pytest -v
-```
-
-37 tests cover: KB CRUD, classifier (regex + scan), Faker mock generation, sanitizer with scope filtering, patch loader, markdown templates, advisory applicability.
-
-## Status
-
-Hackathon MVP, v0.4.
-
-- ✅ MCP server + 3 tools (register / start / complete) work end-to-end
-- ✅ Skill orchestrates the full handoff
-- ✅ Two-phase confirm protocol on `complete_handoff` (preview → user-confirms → execute)
-- ✅ Real refactor patches for the shopify-store demo target — `git apply` cleanly, removes 5 hardcoded secrets from source
-- ✅ 37/37 tests passing
-- ✅ End-to-end live demo runs in 30 seconds via `./scripts/see_it.sh`
-
 ## License
 
 MIT
