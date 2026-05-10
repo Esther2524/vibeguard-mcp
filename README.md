@@ -107,6 +107,50 @@ complete_handoff(approved_advisories=[...], confirm=True)    # execute
 | `start_handoff(intent, contractor_id)` | Returns the manifest summary + the list of privacy advisories applicable to *this* codebase. |
 | `complete_handoff(workspace_id, approved_advisories, scope_globs, persona_summary, ..., confirm=False)` | **Two-phase:** with `confirm=False`, returns the plan. With `confirm=True`, applies refactor patches, generates the sanitized workspace, writes `vibeguard-owner-memory.md` and `vibeguard-contractor-brief.md`. Idempotent. |
 
+## How a handoff actually flows
+
+```
+User: "I want to hand off the front-end to Sarah."
+         │
+         ▼
+   Host agent (Cursor) reads the skill → orchestrates:
+         │
+         ├──► vibeguard.register_codebase("/path/to/shopify-store")
+         │     ← {manifest_id, 5 secrets, 0 PII columns}
+         │
+         ├──► vibeguard.start_handoff(intent="...", contractor_id="sarah")
+         │     ← {workspace_id, manifest_summary, available_advisories}
+         │
+         │  Now the host agent (using its own LLM + skill guidance)
+         │  asks the user ~5 questions in plain English, e.g.:
+         │
+         │    "I scanned your codebase — your front-end has 5 hardcoded
+         │     secrets in src/lib/config.ts. Sarah's AI would see all of
+         │     them. Want me to refactor so they move to env vars?"  → "yes"
+         │
+         │  …4 more grounded questions…
+         │
+         ├──► vibeguard.complete_handoff(
+         │         workspace_id=...,
+         │         approved_advisories=["fe_be_separation", "test_mode_keys"],
+         │         scope_globs=["src/**", "package.json"],
+         │         persona_summary="non-technical merchant, plain English",
+         │         confirm=False                          ← preview first
+         │     )
+         │     ← {plan: {will_modify_owner_codebase: [...], summary_for_user}}
+         │
+         │  Skill shows the plan in chat → "Ready to proceed?" → user: "yes"
+         │
+         ├──► vibeguard.complete_handoff(..., confirm=True)   ← now execute
+         │     ← {executed: true, workspace_path, applied_changes, ...}
+         │
+         ▼
+   "Workspace ready at ~/vibeguard-workspaces/sarah-abc123/.
+    I refactored your codebase: [list]. Send Sarah this folder."
+```
+
+The 5 questions can be slightly different each run — the skill defines the *themes* (persona, scope, advisories, workflow); the host LLM picks the wording.
+
 ## Quick start (Cursor integration)
 
 ```bash
