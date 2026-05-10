@@ -20,6 +20,42 @@ When a non-technical founder ("vibe coder") wants to outsource part of their cod
 
 **No `ANTHROPIC_API_KEY` needed.** No extra LLM bill. The MCP is intentionally LLM-free.
 
+## Example use case · the non-technical owner
+
+Demo codebase: **[ycecilia/shopify-store](https://github.com/ycecilia/shopify-store)**
+
+A purposefully vibe-coded Shopify-style storefront — a polished Lovable-built UI on top of an intentionally messy backend. It's exactly what a non-technical founder ships when they want to "just get it working" and then later realizes they need to hand off the front-end to a contractor.
+
+### How Nia + Greptile fit into the loop
+
+VibeGuard pairs two specialist sponsor MCPs at different stages of the handoff:
+
+| Phase | MCP | Role in the loop | What it surfaces in `shopify-store` |
+|---|---|---|---|
+| **Intake** | **Nia** · *the brain* | Indexes the repo + its dependencies for long-term context. Lets the host agent ask grounded questions instead of generic ones. | Flat structure (frontend + backend + config mixed in `src/`), inconsistent naming (`stripe_stuff.ts`, `database_stuff.ts`), TanStack Start stack, Tailwind v4, 46 shadcn components. Used to phrase questions like *"Sarah's working on the React components — should her agent also see your Stripe integration?"* |
+| **Scan** | **Greptile** · *the shield* | Pre-handoff security scan. Hunts hardcoded secrets, leaked keys, `.env` files in git, unprotected cloud credentials. Blocks the handoff if it finds anything critical. | 🔑 `sk_test_...` Stripe key in **two** files (`src/lib/config.ts`, `src/lib/stripe_stuff.ts`) · 🔑 `AKIA...` AWS access key + secret duplicated · 🔑 Google service account `BEGIN PRIVATE KEY` · 🔑 Admin password · 📤 `STRIPE_PUBLIC` imported into client React and `console.log`-ed |
+| **Brief** | **VibeGuard MCP** · *the orchestrator* | Synthesizes Nia's context + Greptile's findings into a structured handoff: applies refactor patches, produces a sanitized contractor workspace, writes the owner-side memo + contractor-side brief. | Generates `vibeguard-owner-memory.md` ("rotate these 5 keys, contractor never sees `database_stuff.ts`") and `vibeguard-contractor-brief.md` ("here's the frontend scope, here are mocked APIs, never touch `src/lib/config.ts`"). |
+
+### What the full flow looks like
+
+```
+1. register_codebase("/path/to/shopify-store")
+   └─► Nia indexes the structure          ─┐
+   └─► Greptile pre-flight secret scan    ─┴─► classifier writes ~/.vibeguard/kb.json
+                                              {7 secrets, 0 PII columns, fe_be_separation: yes}
+
+2. start_handoff(intent="hand off frontend to Sarah", contractor_id="sarah")
+   └─► returns advisories: [test_mode_keys, fe_be_separation, client_side_key_leak]
+   └─► skill asks ~5 questions in plain English, grounded in Nia's context
+
+3. complete_handoff(...)
+   └─► applies patches → store-frontend/ workspace (no config.ts, no api/, mocked stripe)
+   └─► writes the two markdown artifacts
+   └─► returns: "send Sarah the workspace folder. Real .env stays with you."
+```
+
+Without VibeGuard, this is what a contractor's AI agent would receive on day one. With VibeGuard + Nia + Greptile in the loop, the contractor gets a sanitized twin — same UI surface, no secrets, no PII, mocked APIs — and the owner keeps the real `.env` private.
+
 ## The 3 MCP tools
 
 | Tool | What it does |
