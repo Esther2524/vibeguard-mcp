@@ -76,6 +76,29 @@ python3 -m venv .venv && .venv/bin/pip install -e . pytest
 
 The script clones shopify-store, runs the full handoff, and shows BEFORE / AFTER of every file VibeGuard touches.
 
+Under the hood, the three tools fire in this order:
+
+```
+register_codebase("/path/to/shopify-store")
+  ↳ INDEX:  file walker classifies ~70 files
+  ↳ SCAN:   regex finds 5 secrets — Stripe sk_test (×2),
+            AWS access key (×2), Google service account private key
+  ↳ writes ~/.vibeguard/kb.json
+
+start_handoff(intent="hand off the front-end to Sarah", contractor_id="sarah")
+  ↳ surfaces advisories: [fe_be_separation, test_mode_keys]
+  ↳ skill asks the owner ~5 plain-English questions
+
+complete_handoff(approved_advisories=[...], confirm=False)   # preview
+  ↳ returns plan: 4 files in owner repo will change, workspace will be at ~/...
+  ↳ skill shows plan to user, waits for confirmation
+
+complete_handoff(approved_advisories=[...], confirm=True)    # execute
+  ↳ SANITIZE: applies 2 prebuilt patches (config-to-env + stripe-cleanup)
+  ↳ writes ~/vibeguard-workspaces/sarah-<id>/ (mocked Stripe, no real .env)
+  ↳ writes vibeguard-owner-memory.md + vibeguard-contractor-brief.md
+```
+
 ## The 3 MCP tools
 
 | Tool | What it does |
