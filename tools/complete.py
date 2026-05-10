@@ -1,11 +1,25 @@
-"""Implementation of the `complete_handoff` MCP tool — the heart of the demo."""
+"""Implementation of the `complete_handoff` MCP tool.
+
+NEW STRUCTURED CONTRACT (v0.3): the input is no longer keyed by question_id.
+The host agent (driven by the vibeguard-interview skill) interviews the user
+in its own words, then synthesizes the answers into structured input:
+
+    complete_handoff(
+        workspace_id="...",
+        approved_advisories=["fe_be_separation"],
+        scope_globs=["app/**", "components/**"],
+        persona_summary="non-technical merchant",
+        contractor_handle="sarah",       # optional: overrides contractor_id from start
+        notes="..."                      # optional: anything else to record
+    )
+"""
 import json
 import os
 import pathlib
 from datetime import date
 
 from core.kb import KB
-from core.patches import apply_patch_set, patch_set_for_answers
+from core.patches import apply_patch_set, patch_set_for_advisory
 from core.sanitizer import sanitize_to_workspace
 from templates.contractor_brief import render_contractor_brief
 from templates.owner_memory import render_owner_memory
@@ -13,71 +27,54 @@ from templates.owner_memory import render_owner_memory
 PATCHES_ROOT = os.path.join(os.path.dirname(__file__), "..", "patches")
 WORKSPACES_ROOT = os.path.expanduser("~/vibeguard-workspaces")
 
-
-def _determine_scope(answers: list[dict]) -> list[str] | None:
-    """Look for scope hints in answers; default to a reasonable front-end scope."""
-    for a in answers:
-        ans = (a.get("answer") or "").lower()
-        if "front" in ans or "frontend" in ans or "fe" in ans.split():
-            return [
-                "app/**", "components/**", "pages/**", "src/frontend/**",
-                "public/**", "package.json", "*.config.*", "*.config.js",
-                "tsconfig.json", "tailwind.config.*",
-            ]
-    # default scope is broad — caller can refine via the SCOPE question
-    return [
-        "app/**", "components/**", "pages/**", "src/frontend/**",
-        "public/**", "package.json",
-    ]
+DEFAULT_FORBIDDEN = [".env*", "secrets/**", "infra/**", "src/backend/**"]
 
 
-def _extract_persona(answers: list[dict]) -> str | None:
-    for a in answers:
-        if a.get("question_id", "").startswith("persona"):
-            return a.get("answer")
-    return None
-
-
-def _extract_approved_advisories(answers: list[dict]) -> list[str]:
-    out = []
-    for a in answers:
-        qid = a.get("question_id", "")
-        ans = (a.get("answer") or "").lower()
-        if qid.startswith("advisory") and ans.startswith("yes"):
-            label = qid.replace("advisory_", "").replace("_", " ").upper()
-            out.append(label)
-    return out
-
-
-def complete_handoff_impl(kb: KB, workspace_id: str, answers: list[dict]) -> dict:
+def complete_handoff_impl(
+    kb: KB,
+    workspace_id: str,
+    approved_advisories: list[str] | None = None,
+    scope_globs: list[str] | None = None,
+    persona_summary: str | None = None,
+    contractor_handle: str | None = None,
+    notes: str | None = None,
+) -> dict:
     handoff = kb.get_handoff(workspace_id)
     if not handoff:
         return {"error": f"Unknown workspace_id {workspace_id}. Call start_handoff first."}
 
-    manifest_id = handoff["manifest_id"]
-    contractor = handoff["contractor_id"]
+    approved_advisories = approved_advisories or []
+    scope_globs = scope_globs or [
+        "app/**", "components/**", "pages/**", "src/frontend/**",
+        "public/**", "package.json", "*.config.*",
+    ]
+    persona_summary = persona_summary or "Non-technical owner."
+    contractor = contractor_handle or handoff["contractor_id"]
 
+    manifest_id = handoff["manifest_id"]
     manifest = kb.get_manifest(manifest_id)
     codebase_path = manifest["codebase_path"]
 
-    # 1) Apply hardcoded refactor patches if owner approved any architectural advisories
-    patch_set = patch_set_for_answers(PATCHES_ROOT, answers)
+    # 1) Apply hardcoded refactor patches for any approved advisory
     applied_changes: list[dict] = []
-    if patch_set:
+    for advisory_id in approved_advisories:
+        patch_set = patch_set_for_advisory(PATCHES_ROOT, advisory_id)
+        if patch_set is None:
+            continue
         result = apply_patch_set(codebase_path, patch_set)
         for fn in result["applied"]:
             applied_changes.append({
+                "advisory": advisory_id,
                 "file": fn,
                 "kind": "REFACTOR",
                 "description": f"Applied {patch_set['name']} patch: {fn}",
-                "diff": "",
             })
         for failure in result["failed"]:
             applied_changes.append({
+                "advisory": advisory_id,
                 "file": failure["filename"],
                 "kind": "REFACTOR_FAILED",
-                "description": f"Patch failed: {failure['stderr'].strip()[:120]}",
-                "diff": "",
+                "description": f"Patch failed: {failure['stderr'].strip()[:160]}",
             })
 
     # 2) Generate sanitized contractor workspace
@@ -87,7 +84,6 @@ def complete_handoff_impl(kb: KB, workspace_id: str, answers: list[dict]) -> dic
         for s in kb.get_secrets(manifest_id)
         if s.get("mock_value")
     ]
-    scope_globs = _determine_scope(answers)
     summary = sanitize_to_workspace(codebase_path, workspace_path, secrets_for_sanitize, scope_globs)
 
     # 3) Write owner-memory.md in OWNER's project root
@@ -95,13 +91,11 @@ def complete_handoff_impl(kb: KB, workspace_id: str, answers: list[dict]) -> dic
     existing = None
     if os.path.exists(owner_memory_path):
         existing = pathlib.Path(owner_memory_path).read_text()
-    persona = _extract_persona(answers) or "Non-technical owner."
-    approved = _extract_approved_advisories(answers)
     secrets_count = len(kb.get_secrets(manifest_id))
     pii_count = len(kb.get_pii(manifest_id))
     owner_md = render_owner_memory(
         existing_md=existing,
-        persona=persona,
+        persona=persona_summary,
         codebase_facts={
             "stack": "auto-detected",
             "sensitive_files": list({s["file"] for s in kb.get_secrets(manifest_id)})[:5],
@@ -110,19 +104,19 @@ def complete_handoff_impl(kb: KB, workspace_id: str, answers: list[dict]) -> dic
             "date": date.today().isoformat(),
             "contractor": contractor,
             "feature": handoff["intent"],
-            "approved": approved,
+            "approved": approved_advisories,
             "workspace": workspace_path,
         },
     )
     pathlib.Path(owner_memory_path).write_text(owner_md)
 
-    # 4) Write contractor-brief.md in workspace root
+    # 4) Write contractor-brief.md inside workspace
     brief_path = os.path.join(workspace_path, "vibeguard-contractor-brief.md")
     contractor_md = render_contractor_brief(
         contractor=contractor,
         feature=handoff["intent"],
-        scope_globs=scope_globs or ["**/*"],
-        forbidden_files=[".env*", "secrets/**", "infra/**", "src/backend/**"],
+        scope_globs=scope_globs,
+        forbidden_files=DEFAULT_FORBIDDEN,
         mocks_summary=(
             f"All API keys ({secrets_count} total) replaced with `sk_mock_VIBEGUARD_*` placeholders. "
             f"PII columns ({pii_count} total) replaced with realistic Faker values."
@@ -131,13 +125,20 @@ def complete_handoff_impl(kb: KB, workspace_id: str, answers: list[dict]) -> dic
     pathlib.Path(brief_path).write_text(contractor_md)
 
     # 5) Persist handoff state
-    kb.save_handoff_answers(workspace_id, json.dumps(answers), workspace_path)
+    record = {
+        "approved_advisories": approved_advisories,
+        "scope_globs": scope_globs,
+        "persona_summary": persona_summary,
+        "notes": notes,
+    }
+    kb.save_handoff_answers(workspace_id, json.dumps(record), workspace_path)
 
     return {
         "workspace_path": workspace_path,
         "contractor_brief_path": brief_path,
         "owner_memory_path": owner_memory_path,
         "applied_changes": applied_changes,
+        "approved_advisories": approved_advisories,
         "mock_count": summary["mocks_applied"],
         "redaction_count": pii_count,
         "files_in_workspace": summary["files_copied"],

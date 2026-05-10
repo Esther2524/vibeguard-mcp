@@ -1,8 +1,12 @@
 """Loader + applier for hardcoded refactor patch sets.
 
-Patch sets live in `patches/<name>/` with a `manifest.json` listing
+Patch sets live in `patches/<advisory_id>/` with a `manifest.json` listing
 patch files. Each patch is in unified-diff format and is applied via
 `git apply`.
+
+The triggering rule (v0.3): a patch set is selected when its
+`advisory_id` (which equals the patch directory name) appears in the
+`approved_advisories` list passed to complete_handoff.
 """
 import json
 import os
@@ -50,30 +54,24 @@ def apply_patch_set(target_codebase: str, patch_set: dict) -> dict:
     return {"applied": applied, "failed": failed, "name": patch_set["name"]}
 
 
-def patch_set_for_answers(patch_root: str, answers: list[dict]) -> dict | None:
-    """Look at all patch sets in `patch_root`, find one whose trigger matches answers."""
+def patch_set_for_advisory(patch_root: str, advisory_id: str) -> dict | None:
+    """Look up the patch set for a given advisory_id (patch directory name).
+
+    Returns None if the advisory has no patch set or the manifest is empty
+    (placeholder)."""
     root = pathlib.Path(patch_root)
     if not root.exists():
         return None
-    for patch_dir in root.iterdir():
-        if not patch_dir.is_dir():
-            continue
-        manifest_file = patch_dir / "manifest.json"
-        if not manifest_file.exists():
-            continue
-        try:
-            manifest = json.loads(manifest_file.read_text())
-        except json.JSONDecodeError:
-            continue
-        # Skip placeholder/empty manifests
-        if not manifest.get("patches"):
-            continue
-        trigger_qid = manifest.get("trigger_question_id")
-        trigger_ans = manifest.get("trigger_answer", "yes")
-        for ans in answers:
-            if (
-                ans.get("question_id") == trigger_qid
-                and ans.get("answer", "").lower().startswith(trigger_ans.lower())
-            ):
-                return load_patch_set(str(patch_dir))
-    return None
+    patch_dir = root / advisory_id
+    if not patch_dir.is_dir():
+        return None
+    manifest_file = patch_dir / "manifest.json"
+    if not manifest_file.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_file.read_text())
+    except json.JSONDecodeError:
+        return None
+    if not manifest.get("patches"):
+        return None
+    return load_patch_set(str(patch_dir))

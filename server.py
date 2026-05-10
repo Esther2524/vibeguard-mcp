@@ -1,10 +1,8 @@
 """VibeGuard MCP server — entry point.
 
-Exposes 3 tools that any MCP-compatible host (Cursor, Claude Desktop, etc.)
-can call:
-    - register_codebase
-    - start_handoff
-    - complete_handoff
+Three tools that any MCP-compatible host (Cursor, Claude Desktop, etc.)
+can call. The companion `skills/vibeguard-interview.skill.md` orchestrates
+the user-facing conversation; this server is pure mechanism.
 
 Run with: python server.py
 """
@@ -26,43 +24,87 @@ _kb = KB(KB_PATH)
 
 @mcp.tool()
 def register_codebase(codebase_path: str, incremental: bool = False) -> dict:
-    """Call this once on a codebase, then again incrementally as files change.
+    """Scan an existing codebase and classify sensitive items into privacy zones.
 
-    Scans the codebase and classifies sensitive items into privacy zones
-    (SECRETS, PII, BUSINESS_LOGIC, SAFE_TO_SHARE). Persists the classification
-    to the CodebaseKB. Required before start_handoff can be called.
+    Walks the codebase, finds secrets (Stripe / AWS / OpenAI / etc keys) via regex
+    and PII columns (email / ssn / address / etc) via SQL schema parsing, then
+    persists a manifest to the local KB at ~/.vibeguard/kb.json.
+
+    Required before start_handoff can be called.
+
+    Args:
+        codebase_path: absolute path to the project root.
+        incremental: reserved for future use.
     """
     return register_codebase_impl(_kb, codebase_path)
 
 
 @mcp.tool()
 def start_handoff(intent: str, contractor_id: str = "unknown") -> dict:
-    """Call this when an owner expresses intent to hand off work to a contractor.
+    """Begin a contractor handoff. Returns the manifest summary + applicable advisories.
 
-    Retrieves relevant context from the CodebaseKB and returns 5 clarifying
-    questions that the host agent should ask the owner. Questions mix
-    persona discovery, scope decisions, and privacy education + advisory
-    recommendations.
+    The MCP does NOT generate questions itself. The host agent (Cursor / Claude
+    Code) is expected to use the `vibeguard-interview` skill to interview the
+    user, then synthesize structured input for complete_handoff.
 
-    The host agent presents these to the owner in chat.
+    Args:
+        intent: the user's stated goal, e.g. "hand off the front-end to Sarah".
+        contractor_id: short handle for the contractor (used in workspace path).
+
+    Returns:
+        workspace_id: thread this through to complete_handoff.
+        manifest_summary: detected secrets + PII counts and samples.
+        available_advisories: list of privacy improvements applicable to this codebase,
+                              each with id / label / summary / current_status.
+        guidance: brief reminder to use the skill for the interview.
     """
     return start_handoff_impl(_kb, intent, contractor_id)
 
 
 @mcp.tool()
-def complete_handoff(workspace_id: str, answers: list[dict]) -> dict:
-    """Call this after the owner has answered the 5 questions returned by start_handoff.
+def complete_handoff(
+    workspace_id: str,
+    approved_advisories: list[str] | None = None,
+    scope_globs: list[str] | None = None,
+    persona_summary: str | None = None,
+    contractor_handle: str | None = None,
+    notes: str | None = None,
+) -> dict:
+    """Execute the handoff: refactor (if approved) + sanitize + write artifacts.
 
-    VibeGuard does up to 4 things based on the answers:
-    (1) If the owner approved any advisory recommendations (e.g. FE/BE separation),
-        actually modifies the owner's real codebase to implement them.
-    (2) Generates a sanitized contractor workspace with secrets mocked.
-    (3) Updates vibeguard-owner-memory.md in the owner's project root.
-    (4) Writes vibeguard-contractor-brief.md inside the contractor workspace.
+    Call after the host agent has interviewed the user. Pass structured input
+    derived from their answers — this MCP does not parse free-text Q&A.
 
-    Idempotent: re-call with the same workspace_id and updated answers to revise.
+    Args:
+        workspace_id: from start_handoff.
+        approved_advisories: list of advisory ids the user said yes to,
+                             e.g. ["fe_be_separation"]. Each triggers any
+                             patches in patches/<advisory_id>/.
+        scope_globs: list of file glob patterns the contractor needs,
+                     e.g. ["app/**", "components/**"]. Defaults to a
+                     reasonable front-end scope.
+        persona_summary: brief note on the owner's technical level — included
+                         in vibeguard-owner-memory.md for future sessions.
+        contractor_handle: optional override for the contractor name.
+        notes: any extra context to record.
+
+    Side effects:
+        - Applies patches to owner's real codebase if approved_advisories matches.
+        - Creates ~/vibeguard-workspaces/<contractor>-<workspace_id>/ with sanitized files.
+        - Writes vibeguard-owner-memory.md in owner's project root.
+        - Writes vibeguard-contractor-brief.md in the contractor workspace.
+
+    Idempotent: re-call with the same workspace_id and updated args to revise.
     """
-    return complete_handoff_impl(_kb, workspace_id, answers)
+    return complete_handoff_impl(
+        _kb,
+        workspace_id=workspace_id,
+        approved_advisories=approved_advisories,
+        scope_globs=scope_globs,
+        persona_summary=persona_summary,
+        contractor_handle=contractor_handle,
+        notes=notes,
+    )
 
 
 @mcp.tool()

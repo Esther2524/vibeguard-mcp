@@ -1,14 +1,16 @@
 """Implementation of the `start_handoff` MCP tool.
 
-No LLM calls. Returns a 5-question template, customized with the manifest's
-real numbers (e.g. "I found 12 secrets including Stripe and AWS").
+This tool does NO question generation and NO LLM calls. It returns:
+  - The codebase manifest summary (what's sensitive, what's where)
+  - The list of privacy advisories applicable to this codebase
+  - A workspace_id to thread through to complete_handoff
 
-The host agent (Cursor / Claude Code) is expected to use its own LLM —
-ideally guided by the bundled `skills/vibeguard-interview.skill.md` — to
-present the questions, follow up, and interpret answers.
+The host agent (Cursor / Claude Code), guided by the
+`vibeguard-interview.skill.md`, decides what questions to ask the user
+and how to phrase them.
 """
+from core.advisories import applicable_advisories
 from core.kb import KB
-from core.prompts import customize_questions
 
 
 def _manifest_summary(kb: KB, manifest_id: str) -> dict:
@@ -17,11 +19,11 @@ def _manifest_summary(kb: KB, manifest_id: str) -> dict:
     return {
         "SECRETS": {
             "count": len(secrets),
-            "items": [{"file": s["file"], "kind": s["kind"]} for s in secrets[:10]],
+            "items": [{"file": s["file"], "kind": s["kind"]} for s in secrets[:20]],
         },
         "PII": {
             "count": len(pii),
-            "items": [{"file": p["file"], "kind": p["kind"]} for p in pii[:10]],
+            "items": [{"file": p["file"], "kind": p["kind"]} for p in pii[:20]],
         },
     }
 
@@ -32,15 +34,17 @@ def start_handoff_impl(kb: KB, intent: str, contractor_id: str | None) -> dict:
         return {"error": "No manifest found. Call register_codebase first."}
 
     summary = _manifest_summary(kb, manifest_id)
-    questions = customize_questions(summary, intent)
+    secret_kinds = [s["kind"] for s in summary["SECRETS"]["items"]]
+    advisories = applicable_advisories(secret_kinds)
     handoff_id = kb.create_handoff(manifest_id, contractor_id or "unknown", intent)
 
     return {
         "workspace_id": handoff_id,
-        "questions": questions,
-        "retrieved_context": (
-            f"{summary['SECRETS']['count']} secrets, "
-            f"{summary['PII']['count']} PII columns detected in codebase."
+        "manifest_summary": summary,
+        "available_advisories": advisories,
+        "guidance": (
+            "Use the vibeguard-interview skill to conduct the user interview. "
+            "Once the user has answered, call complete_handoff with structured input "
+            "(approved_advisories, scope_globs, persona_summary)."
         ),
-        "manifest_summary": summary,  # host agent can use this for richer prompting
     }

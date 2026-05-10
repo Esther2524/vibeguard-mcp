@@ -1,0 +1,6 @@
+{
+  "name": "fe_be_separation",
+  "advisory_id": "fe_be_separation",
+  "patches": [],
+  "_note": "Placeholder. Add real .patch files (git-diff format) and list them in `patches` to enable live FE/BE refactor on the demo's mock soap-shop. Triggered when complete_handoff receives approved_advisories=['fe_be_separation']."
+}
