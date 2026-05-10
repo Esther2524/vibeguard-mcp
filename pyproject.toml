@@ -1,6 +1,6 @@
 [project]
 name = "vibeguard-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "A privacy-boundary MCP server for safely handing off code to contractors"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,6 +10,17 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Tell setuptools which dirs are Python packages. Otherwise auto-discovery
+# blows up because we have multiple top-level non-Python dirs (skills/,
+# patches/, scripts/).
+packages = ["core", "tools", "templates"]
+py-modules = ["server"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
