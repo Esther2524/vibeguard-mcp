@@ -1,0 +1,7 @@
+{
+  "name": "fe_be_split",
+  "trigger_question_id": "advisory_fe_be",
+  "trigger_answer": "yes",
+  "patches": [],
+  "_note": "Placeholder. Add real .patch files (git-diff format) and list them in `patches` to enable live FE/BE refactor on the demo's mock soap-shop. The soap-shop website is built separately (see Pre-Sprint 1 in the implementation plan)."
+}
