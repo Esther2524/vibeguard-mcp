@@ -1,11 +1,10 @@
 [project]
 name = "vibeguard-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "A privacy-boundary MCP server for safely handing off code to contractors"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
-    "anthropic>=0.40.0",
     "faker>=30.0.0",
 ]
 

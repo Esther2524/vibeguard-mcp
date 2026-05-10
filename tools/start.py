@@ -1,7 +1,14 @@
-"""Implementation of the `start_handoff` MCP tool."""
+"""Implementation of the `start_handoff` MCP tool.
+
+No LLM calls. Returns a 5-question template, customized with the manifest's
+real numbers (e.g. "I found 12 secrets including Stripe and AWS").
+
+The host agent (Cursor / Claude Code) is expected to use its own LLM —
+ideally guided by the bundled `skills/vibeguard-interview.skill.md` — to
+present the questions, follow up, and interpret answers.
+"""
 from core.kb import KB
-from core.llm import llm_json
-from core.prompts import interview_prompt, INTERVIEW_SYSTEM, FALLBACK_QUESTIONS
+from core.prompts import customize_questions
 
 
 def _manifest_summary(kb: KB, manifest_id: str) -> dict:
@@ -25,28 +32,15 @@ def start_handoff_impl(kb: KB, intent: str, contractor_id: str | None) -> dict:
         return {"error": "No manifest found. Call register_codebase first."}
 
     summary = _manifest_summary(kb, manifest_id)
-
-    # Try LLM-generated questions; fall back to hardcoded set on failure
-    try:
-        questions = llm_json(interview_prompt(intent, summary), system=INTERVIEW_SYSTEM)
-        if not isinstance(questions, list) or len(questions) == 0:
-            raise ValueError("LLM returned non-list or empty")
-    except Exception as e:
-        questions = FALLBACK_QUESTIONS
-        warning = f"LLM unavailable, using fallback questions: {type(e).__name__}"
-    else:
-        warning = None
-
+    questions = customize_questions(summary, intent)
     handoff_id = kb.create_handoff(manifest_id, contractor_id or "unknown", intent)
 
-    out = {
+    return {
         "workspace_id": handoff_id,
         "questions": questions,
         "retrieved_context": (
             f"{summary['SECRETS']['count']} secrets, "
             f"{summary['PII']['count']} PII columns detected in codebase."
         ),
+        "manifest_summary": summary,  # host agent can use this for richer prompting
     }
-    if warning:
-        out["warning"] = warning
-    return out

@@ -1,41 +1,19 @@
-"""LLM prompt templates for the 5-question interview generator."""
+"""Question templates for the 5-question handoff interview.
 
-INTERVIEW_SYSTEM = """You are a privacy-aware advisor helping a non-technical small business owner safely outsource code work to a contractor.
+The MCP itself does NO LLM calls. Question generation is split:
 
-Generate exactly 5 clarifying questions in JSON format. Mix three categories:
-- 1 PERSONA question (technical background, prior contractor experience)
-- 1 SCOPE question (what files/data the contractor needs)
-- 2 ADVISORY questions (architectural privacy improvements like FE/BE separation, mock test keys — explain WHY each matters in plain English the owner can understand)
-- 1 SCOPE/workflow question (delivery / integration approach)
+- MCP returns these 5 templated questions, lightly customized with manifest
+  data (e.g. "you have 12 secrets including Stripe and AWS").
+- The host agent (Cursor / Claude Code) uses its own LLM (already paid for
+  by the user's subscription) to ask the questions in chat, follow up,
+  and interpret answers.
 
-Return ONLY a JSON array, no other text. Each item is:
-{
-  "id": "string-like-persona_background",
-  "category": "PERSONA" | "SCOPE" | "ADVISORY",
-  "question": "the human-readable question, with educational context if ADVISORY",
-  "expected_answer_format": "yes_no" | "open" | "choice",
-  "choices": ["A", "B", "C"]
-}
+Optionally, a `skills/vibeguard-interview.skill.md` file ships with this
+repo and tells the host agent how to orchestrate the full interview flow.
+"""
 
-CRITICAL: At least one ADVISORY question MUST have id="advisory_fe_be" and ask about front-end/back-end separation. The owner needs to be able to answer "yes" to trigger our refactor."""
-
-
-def interview_prompt(intent: str, manifest_summary: dict) -> str:
-    secrets_count = manifest_summary.get("SECRETS", {}).get("count", 0)
-    secrets_kinds = [i["kind"] for i in manifest_summary.get("SECRETS", {}).get("items", [])[:5]]
-    pii_count = manifest_summary.get("PII", {}).get("count", 0)
-    pii_kinds = [i["kind"] for i in manifest_summary.get("PII", {}).get("items", [])[:5]]
-    return f"""Owner intent: "{intent}"
-
-Codebase context (from KB):
-- Secrets detected: {secrets_count} items including {secrets_kinds}
-- PII columns: {pii_count} items including {pii_kinds}
-
-Generate the 5 questions per the system instructions. Remember: include id="advisory_fe_be" for the FE/BE question."""
-
-
-# Hardcoded fallback for when LLM is unavailable
-FALLBACK_QUESTIONS = [
+# Static base — always returned by start_handoff.
+BASE_QUESTIONS = [
     {
         "id": "persona_background",
         "category": "PERSONA",
@@ -52,7 +30,7 @@ FALLBACK_QUESTIONS = [
     {
         "id": "advisory_fe_be",
         "category": "ADVISORY",
-        "question": "Right now your front-end queries the database directly — that means the contractor's agent could see customer emails. Want me to set up front-end/back-end separation so the contractor only sees a mocked API? This is the safer choice for privacy.",
+        "question": "PLACEHOLDER — see customize_questions below",
         "expected_answer_format": "yes_no",
     },
     {
@@ -70,3 +48,35 @@ FALLBACK_QUESTIONS = [
         "choices": ["manual", "guide me"],
     },
 ]
+
+
+def customize_questions(summary: dict, intent: str) -> list[dict]:
+    """Inject manifest-specific details into the FE/BE advisory question.
+
+    This gives the questions concrete grounding in the user's actual codebase
+    without needing an LLM call.
+    """
+    secrets_n = summary.get("SECRETS", {}).get("count", 0)
+    pii_n = summary.get("PII", {}).get("count", 0)
+    secret_kinds = sorted({i["kind"] for i in summary.get("SECRETS", {}).get("items", [])[:5]})
+    pii_kinds = sorted({i["kind"] for i in summary.get("PII", {}).get("items", [])[:5]})
+
+    secret_phrase = ", ".join(secret_kinds[:3]) if secret_kinds else "API keys"
+    pii_phrase = ", ".join(pii_kinds[:3]) if pii_kinds else "customer data"
+
+    advisory_fe_be_question = (
+        f"I scanned your codebase and found {secrets_n} secret(s) "
+        f"({secret_phrase}) and {pii_n} PII column(s) ({pii_phrase}). "
+        f"Right now if you outsource without front-end / back-end separation, "
+        f"the contractor's agent will see all of them. "
+        f"**Want me to set up FE/BE separation so the contractor only sees a "
+        f"mocked API?** This is the safer choice for privacy."
+    )
+
+    out = []
+    for q in BASE_QUESTIONS:
+        new_q = dict(q)
+        if q["id"] == "advisory_fe_be":
+            new_q["question"] = advisory_fe_be_question
+        out.append(new_q)
+    return out
