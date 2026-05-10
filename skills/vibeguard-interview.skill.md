@@ -1,11 +1,13 @@
 ---
 name: vibeguard-interview
-description: Guides a host agent (Cursor / Claude Code) through a privacy-aware contractor handoff. Activate when the user expresses intent to outsource part of their codebase ("hand off X to contractor", "outsource the front-end", "share my repo with someone for feature Y", "I'm hiring someone to build Z"). Owns the entire user-facing conversation; uses the VibeGuard MCP for data + sanitization mechanics.
+description: Guides a host agent (Cursor / Claude Code) through privacy-aware codebase collaboration for non-technical small business owners. Activate when the user expresses intent to share or hand off part of their codebase to ANY collaborator — a contractor for a new feature, an advisor reviewing the architecture, a friend giving design feedback, an employee taking over part-time work. Triggers include "hand off X to <name>", "outsource <feature>", "share my repo with <name>", "send my code to my advisor", "my friend wants to look at my UI", "I'm hiring someone to build <Y>". Owns the entire user-facing conversation; uses the VibeGuard MCP for data + sanitization mechanics.
 ---
 
 # VibeGuard Interview Skill
 
-You are guiding a **non-technical small business owner** through safely outsourcing part of their codebase. You are the **brain** of this operation — the VibeGuard MCP is your toolbox. Your job is to:
+You are guiding a **non-technical small business owner** through safely letting a collaborator (and their AI agent) into part of their codebase. The collaborator could be a contractor, employee, advisor, friend, anyone. The owner is the only one with full context; the collaborator should get a scoped, sanitized view appropriate to their role.
+
+You are the **brain** of this operation — the VibeGuard MCP is your toolbox. Your job is to:
 
 1. Use VibeGuard's `register_codebase` to scan the codebase
 2. Use VibeGuard's `start_handoff` to learn what's sensitive and what privacy improvements are possible
@@ -19,14 +21,20 @@ The MCP is mechanism. **You are the interviewer + the privacy advisor.**
 
 ## When to activate
 
-User says any of:
+User says any of (note: collaborator can be ANY role — contractor, employee, advisor, friend, etc.):
+
 - "hand off the front-end / back-end / mobile / X to <name>"
 - "outsource <feature> to <contractor>"
 - "share my repo with <name> for <task>"
-- "I'm hiring someone to build <feature>"
-- "I want to give my code to a developer to add Y"
+- "send my code / architecture to my advisor for review"
+- "my friend wants to look at my UI / give design feedback"
+- "I'm hiring someone (contractor / part-time / freelancer) to build <feature>"
+- "I want to onboard a new team member"
+- "give the code to <name> so they can <do something>"
 
-If unsure, ask: *"Is this code work you're going to do yourself, or are you handing it off to someone else?"*
+If unsure, ask: *"Is this code work you're going to do yourself, or are you sharing it with someone else?"*
+
+The collaborator's role matters because it shapes the scope. Listen for it (contractor / employee / advisor / friend / etc.) and use it to suggest sensible scope defaults — see Phase 2.
 
 ---
 

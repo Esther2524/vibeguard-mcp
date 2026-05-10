@@ -1,16 +1,16 @@
 # VibeGuard
 
-> **A Privacy Guardian for Vibe Coders.**
-> An MCP server + skill that lets non-technical founders safely hand off code to contractors —
-> contractor's agent works against a sanitized twin of the codebase, real secrets never cross the line.
+> **VibeGuard stands guard at the perimeter of your codebase** — every collaborator (and their AI agent) gets a scoped, sanitized view; real secrets never cross the line.
+>
+> *Vibe freely. We guard the rest.*
 >
 > Built for the **Cursor Hackathon — *"Build what agents want."***
 
 ## What it does
 
-When a non-technical founder ("vibe coder") wants to outsource part of their codebase — typically front-end work — they face a hard choice: hand over the entire repo (the contractor's AI agent now has full access to everything), or spend an evening manually scrubbing secrets and PII out of a fork.
+You're a small business owner. You used AI to build your web app — Stripe checkout, customer database, all of it. Now you need help. A **contractor** for a new feature. An **advisor** reviewing your architecture. A **friend** giving design feedback. The moment any of them touches your codebase, their AI agents get full access by default. The contractor's Cursor sees your Stripe live key. The advisor's Claude sees your customer database. **Your codebase has no boundaries.**
 
-**VibeGuard** replaces both options with a **skill + MCP** combo where the skill is the brain.
+**VibeGuard sets them.** It's a **skill + MCP combo** where the skill is the brain.
 
 | Component | Role | Where it lives |
 |---|---|---|
