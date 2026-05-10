@@ -20,41 +20,78 @@ You're a small business owner. You used AI to build your web app — Stripe chec
 
 **No `ANTHROPIC_API_KEY` needed.** No extra LLM bill. The MCP is intentionally LLM-free.
 
-## Example use case · the non-technical owner
+## Architecture · framework + pluggable backends
 
-Demo codebase: **[ycecilia/shopify-store](https://github.com/ycecilia/shopify-store)**
+VibeGuard is an **orchestration framework**, not a scanner. The handoff lifecycle has three phases. Each is a swappable **slot** — the framework defines the contract, a backend does the work.
 
-A purposefully vibe-coded Shopify-style storefront — a polished Lovable-built UI on top of an intentionally messy backend. It's exactly what a non-technical founder ships when they want to "just get it working" and then later realizes they need to hand off the front-end to a contractor.
+```
+              ┌──────────────────────────────────────────────────┐
+              │  VibeGuard skill + MCP — the orchestrator        │
+              │  (owns conversation, lifecycle, brief artifacts) │
+              └────────────────────┬─────────────────────────────┘
+                                   │
+            ┌──────────────────────┼─────────────────────────┐
+            ▼                      ▼                         ▼
+       ┌─────────┐           ┌──────────┐             ┌──────────┐
+       │  INDEX  │           │   SCAN   │             │ SANITIZE │
+       │ what's  │           │  what's  │             │ generate │
+       │ in the  │           │sensitive │             │workspace │
+       │codebase │           │          │             │ + brief  │
+       └─────────┘           └──────────┘             └──────────┘
+            │                      │                         │
+       MVP default:           MVP default:              MVP default:
+       file walker            10 regex                  Faker mocks
+       + filename             patterns                  + git apply
+       matching                                         + prebuilt
+                                                        patches
 
-### How Nia + Greptile fit into the loop
+       Production:            Production:               Production:
+       🤝 Nia                 🤝 Greptile               (Nia for
+       semantic               cross-repo +              schema-aware
+       indexing               git-history               mocks; LLM
+                              secret scan               for novel
+                                                        refactors)
+```
 
-VibeGuard pairs two specialist sponsor MCPs at different stages of the handoff:
+**Why this split is the design, not an afterthought.** In a 5-hour hackathon you can deeply wire two sponsor MCPs *or* build the orchestration layer that uses them — not both. **We picked the orchestration layer**, because:
 
-| Phase | MCP | Role in the loop | What it surfaces in `shopify-store` |
+- **Scanners come and go; orchestration outlives them.** A better secret scanner ships next year — VibeGuard's `SCAN` contract doesn't change. The contractor brief still gets written.
+- **Backends are interchangeable; the user-facing artifacts aren't.** Whatever finds the secret, the markdown brief that lands in the contractor's workspace is what actually keeps the owner safe.
+- **The skill + the brief = the product.** They don't depend on which scanner ran upstream.
+
+### The three slots — MVP default vs production backend
+
+| Slot | What MVP ships | What sponsor takes over | What that buys you |
 |---|---|---|---|
-| **Intake** | **Nia** · *the brain* | Indexes the repo + its dependencies for long-term context. Lets the host agent ask grounded questions instead of generic ones. | Flat structure (frontend + backend + config mixed in `src/`), inconsistent naming (`stripe_stuff.ts`, `database_stuff.ts`), TanStack Start stack, Tailwind v4, 46 shadcn components. Used to phrase questions like *"Sarah's working on the React components — should her agent also see your Stripe integration?"* |
-| **Scan** | **Greptile** · *the shield* | Pre-handoff security scan. Hunts hardcoded secrets, leaked keys, `.env` files in git, unprotected cloud credentials. Blocks the handoff if it finds anything critical. | 🔑 `sk_test_...` Stripe key in **two** files (`src/lib/config.ts`, `src/lib/stripe_stuff.ts`) · 🔑 `AKIA...` AWS access key + secret duplicated · 🔑 Google service account `BEGIN PRIVATE KEY` · 🔑 Admin password · 📤 `STRIPE_PUBLIC` imported into client React and `console.log`-ed |
-| **Brief** | **VibeGuard MCP** · *the orchestrator* | Synthesizes Nia's context + Greptile's findings into a structured handoff: applies refactor patches, produces a sanitized contractor workspace, writes the owner-side memo + contractor-side brief. | Generates `vibeguard-owner-memory.md` ("rotate these 5 keys, contractor never sees `database_stuff.ts`") and `vibeguard-contractor-brief.md` ("here's the frontend scope, here are mocked APIs, never touch `src/lib/config.ts`"). |
+| **INDEX** | flat file walk + filename matching (`core/classifier.py`) | 🤝 **Nia** | semantic codebase understanding — questions go from *"this file matches `*.ts`"* to *"this file is your auth flow"* |
+| **SCAN** | 10 hardcoded secret-pattern regexes | 🤝 **Greptile** | catches secrets in git history (not just current files), cross-file dataflow leak detection, much higher recall |
+| **SANITIZE** | Faker mocks + `git apply` of prebuilt patches in `patches/` | (extends with Nia for schema-aware mocks, LLM for novel refactors) | mocks that match domain semantics ("a fake email for a Brazilian customer"); refactors beyond the demo's prebuilt patch set |
 
-### What the full flow looks like
+The skill, the MCP tool surface, the markdown artifacts, the contractor workspace structure — **none of these change** when a sponsor slots in. That's what we shipped in 5 hours.
+
+### Demo · default backends, end to end
+
+Demo codebase: **[ycecilia/shopify-store](https://github.com/ycecilia/shopify-store)** — a purposefully vibe-coded Shopify-style storefront (polished Lovable-built UI on intentionally messy backend). Exactly what a non-technical founder ships when they want to "just get it working" before realizing they need to hand off the front-end.
 
 ```
-1. register_codebase("/path/to/shopify-store")
-   └─► Nia indexes the structure          ─┐
-   └─► Greptile pre-flight secret scan    ─┴─► classifier writes ~/.vibeguard/kb.json
-                                              {7 secrets, 0 PII columns, fe_be_separation: yes}
+register_codebase("/path/to/shopify-store")
+  ↳ INDEX:  file walker → 47 files classified
+  ↳ SCAN:   regex finds 7 secrets — Stripe sk_test (×2), AWS key (×2),
+            Google service account, admin password, STRIPE_PUBLIC leaked
+            into client React
+  ↳ writes ~/.vibeguard/kb.json
 
-2. start_handoff(intent="hand off frontend to Sarah", contractor_id="sarah")
-   └─► returns advisories: [test_mode_keys, fe_be_separation, client_side_key_leak]
-   └─► skill asks ~5 questions in plain English, grounded in Nia's context
+start_handoff(intent="hand off frontend to Sarah", contractor_id="sarah")
+  ↳ surfaces advisories: [test_mode_keys, fe_be_separation, client_side_key_leak]
+  ↳ skill asks Sarah's owner ~5 plain-English questions
 
-3. complete_handoff(...)
-   └─► applies patches → store-frontend/ workspace (no config.ts, no api/, mocked stripe)
-   └─► writes the two markdown artifacts
-   └─► returns: "send Sarah the workspace folder. Real .env stays with you."
+complete_handoff(approved_advisories=[...])
+  ↳ SANITIZE: applies prebuilt FE/BE split patch
+  ↳ writes ./vibeguard-workspaces/sarah-* (mocked stripe, no api/)
+  ↳ writes vibeguard-owner-memory.md + vibeguard-contractor-brief.md
 ```
 
-Without VibeGuard, this is what a contractor's AI agent would receive on day one. With VibeGuard + Nia + Greptile in the loop, the contractor gets a sanitized twin — same UI surface, no secrets, no PII, mocked APIs — and the owner keeps the real `.env` private.
+Without VibeGuard, this is what a contractor's AI agent would receive on day one — real keys, real PII, the lot. With VibeGuard's framework in the loop — even at MVP defaults — the contractor gets a sanitized twin and the owner keeps the real `.env`. With Nia and Greptile slotted in, every phase gets sharper. **The seams were the point.**
 
 ## The 3 MCP tools
 
