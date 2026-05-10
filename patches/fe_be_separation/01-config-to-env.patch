@@ -1,0 +1,77 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..f90679d
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,11 @@
++# Copy this file to .env.local and fill in real values.
++# .env.local is gitignored — never commit it.
++
++STRIPE_SECRET_KEY=
++STRIPE_PUBLIC_KEY=
++AWS_ACCESS_KEY_ID=
++AWS_SECRET_ACCESS_KEY=
++AWS_REGION=us-west-2
++S3_BUCKET=
++GOOGLE_SERVICE_ACCOUNT_JSON=
++ADMIN_PASSWORD=
+diff --git a/.gitignore b/.gitignore
+index d24df8a..f52d482 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -30,3 +30,5 @@ dist-ssr
+ *.njsproj
+ *.sln
+ *.sw?
++
++.env.local
+diff --git a/src/lib/config.ts b/src/lib/config.ts
+index 462a6cf..843bf3b 100644
+--- a/src/lib/config.ts
++++ b/src/lib/config.ts
+@@ -1,33 +1,18 @@
+ // src/lib/config.ts
+-// IMPORTANT: this file makes everything work. don't touch it
+-// I tried using .env once but it broke so I just put the keys here
+-// I'll fix it later when I have time
++// Refactored by VibeGuard: secrets now read from environment variables.
++// Real values live in .env.local (gitignored). See .env.example for the shape.
+ 
+-var STRIPE_SECRET = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"; // from stripe dashboard
+-let STRIPE_PUBLIC = "pk_test_TYooMQauvdEDq54NiTphI7jx"; // also stripe
+-const AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"; // for the receipt PDF bucket
+-const AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"; // pls don't share
+-const AWS_REGION = "us-west-2";
+-const S3_BUCKET = "shopify-store-receipts-prod";
++const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY ?? "";
++const STRIPE_PUBLIC = process.env.STRIPE_PUBLIC_KEY ?? "";
++const AWS_ACCESS_KEY = process.env.AWS_ACCESS_KEY_ID ?? "";
++const AWS_SECRET_KEY = process.env.AWS_SECRET_ACCESS_KEY ?? "";
++const AWS_REGION = process.env.AWS_REGION ?? "us-west-2";
++const S3_BUCKET = process.env.S3_BUCKET ?? "";
++const GOOGLE_SERVICE_ACCOUNT = JSON.parse(
++  process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? "{}",
++);
++const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
+ 
+-// google cloud thing for analytics, my cousin sent me this
+-// THIS IS IMPORTANT DON'T DELETE
+-const GOOGLE_SERVICE_ACCOUNT = {
+-  type: "service_account",
+-  project_id: "shopify-store-prod-12345",
+-  private_key_id: "abc123fake456fake789",
+-  private_key:
+-    "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDfakekey1234567\nfakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefa\n-----END PRIVATE KEY-----\n",
+-  client_email: "shopify-store@shopify-store-prod-12345.iam.gserviceaccount.com",
+-  client_id: "111111111111111111111",
+-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
+-  token_uri: "https://oauth2.googleapis.com/token",
+-};
+-
+-// admin password for the order dashboard - i set this on a sticky note too
+-var ADMIN_PASSWORD = "shopifystore2024!";
+-
+-// I don't know why this works but don't touch it
+ export {
+   STRIPE_SECRET,
+   STRIPE_PUBLIC,

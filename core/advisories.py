@@ -16,14 +16,18 @@ ADVISORY_CATALOG: list[dict[str, Any]] = [
         "id": "fe_be_separation",
         "label": "Front-end / Back-end separation",
         "summary": (
-            "Refactor the codebase so the front-end calls a back-end API "
-            "instead of touching the database directly. The contractor's "
-            "agent then only sees a mocked API surface, never raw customer "
-            "data or DB credentials."
+            "Pull hardcoded secrets out of source files into env vars; route "
+            "any direct external calls (Stripe, AWS, etc.) through a server-side "
+            "API. The contractor's agent then only sees the front-end + a mocked "
+            "API surface, never the raw secrets."
         ),
-        "applies_when_keywords": ["postgres_url"],
-        # If the codebase has secrets that scream "DB connection in client code",
-        # this advisory is applicable.
+        # Triggered by any secret living in source code — that's the smell that
+        # says "FE and BE are tangled and need to be separated".
+        "applies_when_keywords": [
+            "stripe_secret_key", "stripe_test_key", "aws_access_key",
+            "openai_api_key", "anthropic_key", "github_pat", "postgres_url",
+            "private_key_pem", "slack_token", "generic_jwt",
+        ],
     },
     {
         "id": "test_mode_keys",
@@ -33,7 +37,7 @@ ADVISORY_CATALOG: list[dict[str, Any]] = [
             "in the contractor workspace. The contractor can run real-looking "
             "checkout flows without touching real money."
         ),
-        "applies_when_keywords": ["stripe_secret_key"],
+        "applies_when_keywords": ["stripe_secret_key", "stripe_test_key"],
     },
 ]
 

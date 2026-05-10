@@ -14,12 +14,22 @@ def test_test_mode_keys_applies_when_stripe_present():
 
 
 def test_inapplicable_advisories_still_returned():
-    # No stripe, no postgres — neither advisory should be applicable, but both
+    # No secrets at all — neither advisory should be applicable, but both
     # still returned so the skill can decide whether to mention them.
-    advs = applicable_advisories(["openai_api_key"])
+    advs = applicable_advisories(["some_unknown_kind"])
     statuses = {a["id"]: a["current_status"] for a in advs}
     assert statuses["fe_be_separation"] == "not_applicable"
     assert statuses["test_mode_keys"] == "not_applicable"
+
+
+def test_fe_be_separation_applies_to_any_source_secret():
+    """fe_be_separation should trigger on any secret kind in source code,
+    not just postgres — that's the whole 'tangled FE/BE' smell."""
+    for kind in ["openai_api_key", "anthropic_key", "github_pat", "stripe_test_key"]:
+        advs = applicable_advisories([kind])
+        by_id = {a["id"]: a for a in advs}
+        assert by_id["fe_be_separation"]["current_status"] == "applicable", \
+            f"fe_be_separation should be applicable for {kind}"
 
 
 def test_catalog_entries_have_required_fields():

@@ -1,0 +1,43 @@
+diff --git a/src/lib/stripe_stuff.ts b/src/lib/stripe_stuff.ts
+index 73a28c8..a8a6efd 100644
+--- a/src/lib/stripe_stuff.ts
++++ b/src/lib/stripe_stuff.ts
+@@ -1,19 +1,11 @@
+ // src/lib/stripe_stuff.ts
+-// stripe checkout helper, copied from their docs mostly
+-import { STRIPE_SECRET, S3_BUCKET } from "./config";
++// Refactored by VibeGuard:
++//  - removed inline duplicate Stripe + AWS keys (use the imports from ./config)
++//  - removed console.logs that leaked the live key + user data into browser/server logs
++import { STRIPE_SECRET, AWS_ACCESS_KEY, S3_BUCKET } from "./config";
+ import { saveOrder } from "./database_stuff";
+ 
+-// hardcoding here too because the import was acting weird one time
+-const stripe_key = "sk_test_4eC39HqLyjWDarjtT1zdp7dc";
+-
+-// also pasting AWS keys here just in case the import doesn't work
+-const AWS_KEY = "AKIAIOSFODNN7EXAMPLE";
+-const AWS_SECRET = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+-
+ export async function createCheckout(product: { name: string; price: number }) {
+-  console.log("User data:", product); // for debugging :)
+-  console.log("Stripe key being used:", stripe_key);
+-
+   // pretend stripe call (we'll wire this up later)
+   const fake_session = {
+     id: "cs_test_" + Date.now(),
+@@ -21,8 +13,12 @@ export async function createCheckout(product: { name: string; price: number }) {
+     amount_total: product.price * 100,
+   };
+ 
+-  let saved = saveOrder({ product, session_id: fake_session.id });
+-  console.log("Would upload receipt to:", S3_BUCKET, "with key:", AWS_KEY);
++  // STRIPE_SECRET / AWS_ACCESS_KEY are now read from env, never logged.
++  const _useEnv = { STRIPE_SECRET, AWS_ACCESS_KEY, S3_BUCKET };
++  void _useEnv;
++
++  const saved = saveOrder({ product, session_id: fake_session.id });
++  void saved;
+ 
+   return fake_session;
+ }
