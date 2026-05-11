@@ -4,6 +4,8 @@
 >
 > *Vibe freely. We guard the rest.*
 >
+> _See [Threat model](#threat-model) for the protection scope._
+>
 > Built for the **Cursor Hackathon — *"Build what agents want."***
 
 ## What it does
@@ -198,6 +200,16 @@ python scripts/dry_run.py /path/to/repo   # same as dry-run, on any codebase
 - `patches/` — pre-written refactor patches per advisory_id.
 - `skills/` — host-agent skill files. **The most important file in the repo.**
 - `scripts/` — quickstart, dry-run, see-it walkthrough.
+
+## Threat model
+
+VibeGuard is designed for one specific protection scope. It's worth being explicit about what it does and does not do.
+
+**In scope — accidental leakage by cooperative agents.** A contractor's AI agent helpfully reads `config.ts` looking for context, then echoes a Stripe key into a chat message or commits it. VibeGuard prevents this by ensuring the workspace simply does not contain that file: real secrets are mocked and scope-excluded paths are absent. The brief also names workspace + owner-repo absolute paths so a cooperative agent can recognize the boundary.
+
+**Out of scope today — adversarial exfiltration.** An attacker (or a misaligned AI agent) with shell-level filesystem access can ignore the brief and read the owner's real codebase directly. The brief is honor-system text, not OS enforcement. Defending this surface needs one of: a Claude Code permission hook that blocks paths outside the workspace, a Docker / macOS App Sandbox wrapper, or a `chroot`-style restricted shell. These are on the roadmap.
+
+If your threat model includes adversarial contractors, layer one of those mechanisms on top of VibeGuard — don't rely on the brief alone.
 
 ## License
 

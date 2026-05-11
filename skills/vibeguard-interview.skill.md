@@ -101,6 +101,14 @@ If unsure, default to common front-end globs: `["app/**", "components/**", "page
 
 → Save as `scope_globs` (list of glob patterns).
 
+**Follow-up — explicit forbidden paths:**
+
+After the scope question is answered, ask:
+
+> "Are there any folders or files the contractor should be told **explicitly never to touch**? (e.g., `~/private-notes/`, `/path/to/admin/`, an internal billing folder). Press enter to skip."
+
+→ Save the answer as `forbidden_paths` (list of path strings, or empty list if skipped).
+
 ### Theme 3: Each *applicable* ADVISORY (one question per applicable advisory)
 
 For every advisory in `available_advisories` where `current_status == "applicable"`, ask the user about it.
@@ -158,7 +166,8 @@ vibeguard.complete_handoff(
   scope_globs=[<list of glob patterns from the scope question>],
   persona_summary="<free-text summary from Theme 1>",
   contractor_handle="<contractor name if user gave one>",
-  notes="<anything else worth recording>"
+  notes="<anything else worth recording>",
+  forbidden_paths=[<list of paths from the explicit forbidden-paths follow-up, or omit if empty>],  # from Theme 2 follow-up
   # confirm omitted — defaults to False = preview mode
 )
 ```
