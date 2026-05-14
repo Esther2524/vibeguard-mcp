@@ -44,6 +44,7 @@ def complete_handoff_impl(
     contractor_handle: str | None = None,
     notes: str | None = None,
     confirm: bool = False,
+    forbidden_paths: list[str] | None = None,
 ) -> dict:
     handoff = kb.get_handoff(workspace_id)
     if not handoff:
@@ -159,15 +160,18 @@ def complete_handoff_impl(
     )
     pathlib.Path(owner_memory_path).write_text(owner_md)
 
+    merged_forbidden = list(DEFAULT_FORBIDDEN) + (forbidden_paths or [])
     contractor_md = render_contractor_brief(
         contractor=contractor,
         feature=handoff["intent"],
         scope_globs=scope_globs,
-        forbidden_files=DEFAULT_FORBIDDEN,
+        forbidden_files=merged_forbidden,
         mocks_summary=(
             f"All API keys ({secrets_count} total) replaced with `sk_mock_VIBEGUARD_*` placeholders. "
             f"PII columns ({pii_count} total) replaced with realistic Faker values."
         ),
+        workspace_path=workspace_path,
+        original_repo_path=codebase_path,
     )
     pathlib.Path(contractor_brief_path).write_text(contractor_md)
 

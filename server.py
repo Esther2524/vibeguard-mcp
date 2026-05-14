@@ -70,6 +70,7 @@ def complete_handoff(
     contractor_handle: str | None = None,
     notes: str | None = None,
     confirm: bool = False,
+    forbidden_paths: list[str] | None = None,
 ) -> dict:
     """Plan or execute the handoff. TWO-PHASE:
 
@@ -96,6 +97,9 @@ def complete_handoff(
         contractor_handle: optional override for the contractor name.
         notes: any extra context to record.
         confirm: must be True to actually execute. Default False = preview only.
+        forbidden_paths: additional paths to explicitly forbid in the contractor
+                         brief, augmenting the defaults (e.g. ["~/private-notes/",
+                         "/path/to/billing/"]). Merged with DEFAULT_FORBIDDEN.
 
     Idempotent: re-call with the same workspace_id and updated args to revise.
     """
@@ -108,6 +112,7 @@ def complete_handoff(
         contractor_handle=contractor_handle,
         notes=notes,
         confirm=confirm,
+        forbidden_paths=forbidden_paths,
     )
 
 
